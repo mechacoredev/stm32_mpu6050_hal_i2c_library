@@ -1,0 +1,1 @@
+# stm32_mpu6050-6500_hal_i2c_library
