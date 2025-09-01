@@ -50,7 +50,7 @@ mpu6050_config_t my_mpu6050_config;
 mpu6050_handle_t my_mpu6050;
 uint8_t my_mpuadd;
 uint8_t data_ready_flag=0;
-uint8_t dma_read_flag=0;
+uint8_t dma_read_flag=1;
 uint8_t calculate_values_flag=0;
 /* USER CODE END PV */
 
@@ -144,14 +144,14 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  if(data_ready_flag==1 && dma_read_flag==1){
-		  mpu6050_read_values_dma(my_mpu6050);
 		  dma_read_flag=0;
 		  data_ready_flag=0;
+		  mpu6050_read_values_dma(my_mpu6050);
 	  }
 	  if(calculate_values_flag==1){
+		  calculate_values_flag=0;
 		  mpu6050_get_values(my_mpu6050);
 		  mpu6050_get_values_ing_ins(my_mpu6050, &my_mpu6050_config);
-		  calculate_values_flag=0;
 	  }
   }
   /* USER CODE END 3 */
