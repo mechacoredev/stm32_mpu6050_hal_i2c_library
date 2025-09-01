@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "mpu6500_mpu6050.h"
+#include "mpu6050.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,9 +46,12 @@ DMA_HandleTypeDef hdma_i2c1_rx;
 TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
-MPU6xx0_t my_mpu;
-MPU6xx0_Configuration_t my_mpuconfig;
+mpu6050_config_t my_mpu6050_config;
+mpu6050_handle_t my_mpu6050;
 uint8_t my_mpuadd;
+uint8_t data_ready_flag=0;
+uint8_t dma_read_flag=0;
+uint8_t calculate_values_flag=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,44 +102,37 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  my_mpu.i2c_handle=&hi2c1;
-  my_mpuadd=MPU6xx0_AutoDetect(&my_mpu);
-  MPU6xx0_Init(&my_mpu, my_mpuadd);
-  my_mpuconfig.A_Dlpf_Cfg=2;
-  my_mpuconfig.Accel_Fchoice_B=0;
-  my_mpuconfig.Accel_FS_Sel=ACCEL_8G;
-  my_mpuconfig.Config.Dlpf_Cfg=0;
-  my_mpuconfig.Config.Ext_Sync_Set=0;
-  my_mpuconfig.Config.Fifo_Mode=0;
-  my_mpuconfig.Dlpf_Cfg=2;
-  my_mpuconfig.Fchoice_B=0;
-  my_mpuconfig.Gyro_FS_Sel=GYRO_1000_DPS;
-  my_mpuconfig.Power_Manage1.ClkSel=0;
-  my_mpuconfig.Power_Manage1.Cycle=0;
-  my_mpuconfig.Power_Manage1.Device_Reset=0;
-  my_mpuconfig.Power_Manage1.Gyro_Standby=0;
-  my_mpuconfig.Power_Manage1.Sleep=0;
-  my_mpuconfig.Power_Manage1.Temp_Dis=0;
-  my_mpuconfig.Int_Enable.RAW_RDY_EN=0;
-  my_mpuconfig.Int_Enable.Fifo_OverFlow_En=0;
-  my_mpuconfig.Int_Enable.Fsync_Int_En=0;
-  my_mpuconfig.Int_Enable.Wom_En=0;
-  my_mpuconfig.Int_pin.Actl=0;
-  my_mpuconfig.Int_pin.Open=0;
-  my_mpuconfig.Int_pin.Latch_Int_En=0;
-  my_mpuconfig.Int_pin.Int_Anyrd_2clear=0;
-  my_mpuconfig.Int_pin.Actl_Fsync=0;
-  my_mpuconfig.Int_pin.Bypass_En=0;
-  my_mpuconfig.Int_pin.Fsync_Int_Mode_En=0;
-  my_mpuconfig.FIFO_Enable.TEMP_OUT=0;
-  my_mpuconfig.FIFO_Enable.GYRO_XOUT=0;
-  my_mpuconfig.FIFO_Enable.GYRO_YOUT=0;
-  my_mpuconfig.FIFO_Enable.GYRO_ZOUT=0;
-  my_mpuconfig.FIFO_Enable.ACCEL=0;
-  my_mpuconfig.FIFO_Enable.SLV_2=0;
-  my_mpuconfig.FIFO_Enable.SLV_1=0;
-  my_mpuconfig.FIFO_Enable.SLV_0=0;
-  MPU6xx0_Config(&my_mpu, &my_mpuconfig);
+  my_mpu6050_config.i2c_handle=&hi2c1;
+  my_mpu6050_config.max_delay=1000;
+  my_mpuadd=mpu6050_autodetect(&hi2c1);
+  my_mpu6050=mpu6050_init(&my_mpu6050_config, my_mpuadd);
+  my_mpu6050_config.config.bits.dlpf_cfg=4; // 9.9 ms
+  my_mpu6050_config.config.bits.ext_sync_set=0; // bu ne?
+  my_mpu6050_config.config.bits.fifo_mode=0; // yeni veriler yazılsın
+  my_mpu6050_config.accel_config.bits.accel_fs_sel=0;
+  my_mpu6050_config.accel_config2.bits.a_dlpf_cfg=3;
+  my_mpu6050_config.accel_config2.bits.accel_fchoice_b=0;
+  my_mpu6050_config.gyro_config.bits.f_choice_b=0;
+  my_mpu6050_config.gyro_config.bits.gyro_fs_sel=0;
+  my_mpu6050_config.pwr_mgmt1.bits.clk_sel=1;
+  my_mpu6050_config.pwr_mgmt1.bits.cycle=0; // bu ne?
+  my_mpu6050_config.pwr_mgmt1.bits.device_reset=0;
+  my_mpu6050_config.pwr_mgmt1.bits.gyro_standby=0;
+  my_mpu6050_config.pwr_mgmt1.bits.sleep=0;
+  my_mpu6050_config.pwr_mgmt1.bits.temp_dis=0;
+  my_mpu6050_config.sample_rate=255; // max sample rate
+  my_mpu6050_config.int_pin_config.bits.actl=0;
+  my_mpu6050_config.int_pin_config.bits.actl_fsync=0;
+  my_mpu6050_config.int_pin_config.bits.bypass_en=0;
+  my_mpu6050_config.int_pin_config.bits.fsync_int_mode_en=0; // fsync pin ne bilmediğim için 0 yaptım
+  my_mpu6050_config.int_pin_config.bits.int_anyrd_2clear=1; // herhangi okuma olunca interrupt status clear olsun
+  my_mpu6050_config.int_pin_config.bits.latch_int_en=1; // okumamız olana kadar int status clear olmasın
+  my_mpu6050_config.int_pin_config.bits.open=0; // push pull olsun
+  my_mpu6050_config.int_en.bits.fifo_overflow_en=0; // şimdilik fifo kullanmıyoruz
+  my_mpu6050_config.int_en.bits.fsync_int_en=0;
+  my_mpu6050_config.int_en.bits.raw_rdy_en=1;
+  my_mpu6050_config.int_en.bits.wom_en=0;
+  mpu6050_configurate(my_mpu6050, &my_mpu6050_config);
   HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
@@ -147,6 +143,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(data_ready_flag==1 && dma_read_flag==1){
+		  mpu6050_read_values_dma(my_mpu6050);
+		  dma_read_flag=0;
+		  data_ready_flag=0;
+	  }
+	  if(calculate_values_flag==1){
+		  mpu6050_get_values(my_mpu6050);
+		  mpu6050_get_values_ing_ins(my_mpu6050, &my_mpu6050_config);
+		  calculate_values_flag=0;
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -299,13 +305,25 @@ static void MX_DMA_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin : interrupt_Pin */
+  GPIO_InitStruct.Pin = interrupt_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(interrupt_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -316,13 +334,20 @@ static void MX_GPIO_Init(void)
 
 void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c){
 	if(hi2c->Instance==I2C1){
-		MPU6xx0_getValues(&my_mpu);
-		MPU6xx0_getValuesIngIns(&my_mpu, &my_mpuconfig);
+		dma_read_flag=1;
+		calculate_values_flag=1;
 	}
 }
+/*
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if(htim->Instance==TIM2){
-		mpu6xx0_ReadValues_DMA(&my_mpu);
+		mpu6050_read_values_dma(my_mpu6050);
+	}
+}
+*/
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if(GPIO_Pin==interrupt_Pin){
+		data_ready_flag=1;
 	}
 }
 /* USER CODE END 4 */
